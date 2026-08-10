@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <title>Átirányítás</title>
+  <style>
+    body { font-family: Arial; text-align: center; padding-top: 40px; }
+    button { padding: 12px 22px; font-size: 18px; margin: 10px; cursor: pointer; }
+    #goBtn { background: #4CAF50; color: white; }
+    #saveBtn { background: #2196F3; color: white; }
+    input { padding: 10px; font-size: 18px; width: 300px; }
+    #status { margin-top: 15px; font-size: 16px; font-weight: bold; }
+    #details { margin-top: 5px; font-size: 14px; color: #555; }
+  </style>
+</head>
+<body>
+
+  <h2>Átirányító oldal</h2>
+
+  <p>Jelenlegi átirányítási URL:</p>
+  <p id="currentUrl" style="font-weight:bold; font-size:20px;">Betöltés...</p>
+
+  <button id="goBtn">Átirányítás</button>
+
+  <hr style="margin:40px 0; width:60%;">
+
+  <h3>Új átirányítási URL beállítása</h3>
+
+  <input id="newUrlInput" type="text" placeholder="https://példa.hu">
+  <br>
+  <button id="saveBtn">Mentés</button>
+
+  <p id="status"></p>
+  <p id="details"></p>
+
+  <script>
+    const backendGet = "https://redirect-project-hyo3.onrender.com/getUrl";
+    const backendSet = "https://redirect-project-hyo3.onrender.com/setUrl";
+
+    async function loadUrl() {
+      const res = await fetch(backendGet);
+      const data = await res.json();
+      window.redirectUrl = data.url;
+      document.getElementById("currentUrl").innerText = data.url;
+    }
+
+    document.getElementById("goBtn").onclick = () => {
+      window.location.href = window.redirectUrl;
+    };
+
+    function isValidUrlFormat(url) {
+      try {
+        new URL(url);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    async function urlExists(url) {
+      try {
+        const res = await fetch(url, { method: "HEAD" });
+        return res.ok;
+      } catch {
+        return false;
+      }
+    }
+
+    document.getElementById("saveBtn").onclick = async () => {
+      const newUrl = document.getElementById("newUrlInput").value.trim();
+      const status = document.getElementById("status");
+      const details = document.getElementById("details");
+
+      status.style.color = "black";
+      details.innerText = "";
+
+      if (!isValidUrlFormat(newUrl)) {
+        status.innerText = "Hibás URL formátum.";
+        details.innerText = "Az URL-nek https:// kezdetű, érvényes webcímnek kell lennie.";
+        return;
+      }
+
+      status.innerText = "Webhely ellenőrzése…";
+
+      if (!(await urlExists(newUrl))) {
+        status.innerText = "A webhely nem elérhető.";
+        details.innerText = "A szerver nem válaszolt HEAD kérésre.";
+        return;
+      }
+
+      status.innerText = "Mentés…";
+
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+
+        const res = await fetch(backendSet, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: newUrl }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeout);
+
+        if (!res.ok) {
+          status.innerText = "A mentés nem sikerült.";
+          details.innerText = `HTTP hiba: ${res.status} ${res.statusText}`;
+          return;
+        }
+
+        const data = await res.json();
+
+        window.redirectUrl = data.url;
+        document.getElementById("currentUrl").innerText = data.url;
+
+        status.style.color = "green";
+        status.innerText = "Sikeresen mentve!";
+        details.innerText = "";
+
+      } catch (err) {
+        status.innerText = "A mentés nem sikerült.";
+        details.innerText = `Részletek: ${err.message}`;
+      }
+    };
+
+    loadUrl();
+  </script>
+
+</body>
+</html>
