@@ -1,24 +1,43 @@
 <!DOCTYPE html>
 <html lang="hu">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Átirányító oldal</title>
+
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
+    body { font-family: Arial; margin: 20px; }
+
+    /* Betöltő képernyő */
+    #loadingScreen {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      font-weight: bold;
     }
+
+    /* Tartalom, ami csak backend ébredés után jelenik meg */
+    #content {
+      display: none;
+    }
+
     input {
       width: 100%;
       padding: 8px;
       margin-top: 10px;
     }
+
     button {
       padding: 10px 15px;
       margin-top: 10px;
       cursor: pointer;
     }
+
     #status {
       margin-top: 10px;
       color: red;
@@ -27,42 +46,86 @@
 </head>
 <body>
 
-  <h2>Átirányító oldal</h2>
+  <!-- Betöltő képernyő -->
+  <div id="loadingScreen">Betöltés…</div>
 
-  <p>Jelenlegi átirányítási URL:</p>
-  <p id="currentUrl">Betöltés...</p>
-  <button onclick="redirect()">Átirányítás</button>
+  <!-- Tartalom -->
+  <div id="content">
+    <h2>Átirányító oldal</h2>
 
-  <h3>Új átirányítási URL beállítása</h3>
-  <input id="newUrl" type="text" placeholder="Új URL..." />
-  <button onclick="saveUrl()">Mentés</button>
+    <p>Jelenlegi átirányítási URL:</p>
+    <p id="currentUrl">Betöltés...</p>
+    <button onclick="redirect()">Átirányítás</button>
 
-  <p id="status"></p>
+    <h3>Új átirányítási URL beállítása</h3>
+    <input id="newUrl" type="text" placeholder="Új URL...">
+    <button onclick="saveUrl()">Mentés</button>
+
+    <p id="status"></p>
+  </div>
 
   <script>
     const backendGet = "https://redirect-project-hyo3.onrender.com/getUrl";
     const backendSet = "https://redirect-project-hyo3.onrender.com/setUrl";
 
-    // 🟦 WAKE-UP PING — felébreszti a Render backendet
-    (async () => {
-      try {
-        await fetch(backendGet, { method: "GET" });
-      } catch (e) {
-        // A hiba nem számít, a lényeg hogy a backend ébredjen
-      }
-    })();
+    // 🟦 Több lépcsős wake-up rendszer (Render free tierhez optimalizálva)
+    async function wakeUpBackend() {
+      const delays = [0, 2000, 5000, 10000]; // 0s, 2s, 5s, 10s
 
+      for (const delay of delays) {
+        setTimeout(() => {
+          fetch(backendGet).catch(() => {});
+        }, delay);
+      }
+    }
+
+    // 🟦 Backend állapot ellenőrzése
+    async function checkBackendReady() {
+      try {
+        const res = await fetch(backendGet);
+        if (!res.ok) return false;
+        const data = await res.json();
+        return data && data.url;
+      } catch {
+        return false;
+      }
+    }
+
+    // 🟦 Betöltő képernyő → eltűnik, ha a backend felállt
+    async function waitForBackend() {
+      wakeUpBackend();
+
+      let ready = false;
+
+      for (let i = 0; i < 20; i++) {   // max ~20 próbálkozás (kb. 20–30 mp)
+        ready = await checkBackendReady();
+        if (ready) break;
+        await new Promise(r => setTimeout(r, 1500)); // 1.5 mp várakozás
+      }
+
+      if (ready) {
+        document.getElementById("loadingScreen").style.display = "none";
+        document.getElementById("content").style.display = "block";
+        loadUrl();
+      } else {
+        document.getElementById("loadingScreen").innerText =
+          "A backend nem elérhető. Próbáld újra később.";
+      }
+    }
+
+    // 🟦 URL betöltése
     async function loadUrl() {
       try {
         const res = await fetch(backendGet);
         const data = await res.json();
         window.redirectUrl = data.url;
         document.getElementById("currentUrl").innerText = data.url;
-      } catch (err) {
+      } catch {
         document.getElementById("currentUrl").innerText = "Hiba történt.";
       }
     }
 
+    // 🟦 Mentés
     async function saveUrl() {
       const newUrl = document.getElementById("newUrl").value.trim();
       if (!newUrl) {
@@ -83,19 +146,21 @@
 
         document.getElementById("status").innerText = "Sikeres mentés!";
         loadUrl();
-      } catch (err) {
+      } catch {
         document.getElementById("status").innerText =
           "A mentés nem sikerült. Részletek: Failed to fetch";
       }
     }
 
+    // 🟦 Átirányítás
     function redirect() {
       if (window.redirectUrl) {
         window.location.href = window.redirectUrl;
       }
     }
 
-    loadUrl();
+    // 🟦 Induláskor: backend felébresztése + betöltő képernyő
+    waitForBackend();
   </script>
 
 </body>
