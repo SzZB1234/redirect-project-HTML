@@ -206,7 +206,7 @@
       }
       try {
         await navigator.clipboard.writeText(cachedUrl);
-        showMessage("Másolva.");
+        showMessage("Másolva.", "ok");
       } catch {
         showMessage("A böngésző nem engedélyezi a vágólap használatát.", "err");
       }
