@@ -1,167 +1,264 @@
 <!DOCTYPE html>
 <html lang="hu">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Átirányító oldal</title>
-
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Átirányító kezelő</title>
   <style>
-    body { font-family: Arial; margin: 20px; }
-
-    /* Betöltő képernyő */
-    #loadingScreen {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: white;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: 24px;
-      font-weight: bold;
+    :root {
+      --bg: #f6f8fb;
+      --card: #ffffff;
+      --accent: #2563eb;
+      --muted: #6b7280;
+      --danger: #dc2626;
     }
-
-    /* Tartalom, ami csak backend ébredés után jelenik meg */
-    #content {
-      display: none;
-    }
-
-    input {
-      width: 100%;
-      padding: 8px;
-      margin-top: 10px;
-    }
-
-    button {
-      padding: 10px 15px;
-      margin-top: 10px;
-      cursor: pointer;
-    }
-
-    #status {
-      margin-top: 10px;
-      color: red;
+    html,body { height:100%; margin:0; font-family:Inter,Segoe UI,Arial,sans-serif; background:var(--bg); color:#111827; }
+    .wrap { max-width:900px; margin:40px auto; padding:20px; }
+    .card { background:var(--card); border-radius:12px; padding:20px; box-shadow:0 6px 18px rgba(15,23,42,0.06); }
+    h1 { margin:0 0 8px 0; font-size:20px; }
+    p.lead { margin:0 0 18px 0; color:var(--muted); }
+    .row { display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+    label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
+    input[type="text"] { width:100%; padding:10px 12px; border:1px solid #e6e9ef; border-radius:8px; font-size:14px; }
+    button { background:var(--accent); color:white; border:0; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600; }
+    button.ghost { background:transparent; color:var(--accent); border:1px solid #dbeafe; }
+    .muted { color:var(--muted); font-size:13px; }
+    .status { margin-top:12px; font-size:14px; }
+    .status.ok { color:green; }
+    .status.err { color:var(--danger); }
+    .small { font-size:13px; color:var(--muted); }
+    .flex-between { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .current-url { word-break:break-all; background:#f8fafc; padding:10px; border-radius:8px; border:1px dashed #e6eefc; }
+    footer { margin-top:18px; font-size:13px; color:var(--muted); text-align:right; }
+    @media (max-width:640px) {
+      .row { flex-direction:column; align-items:stretch; }
     }
   </style>
 </head>
 <body>
+  <div class="wrap">
+    <div class="card" id="app">
+      <div class="flex-between">
+        <div>
+          <h1>Átirányító kezelő</h1>
+          <p class="lead">A frontend Cloudflare Worker backendre van konfigurálva. A Worker soha nem alszik, így nincs szükség ébresztésre.</p>
+        </div>
+        <div class="small">Status: <span id="liveIndicator" class="muted">ellenőrzés…</span></div>
+      </div>
 
-  <!-- Betöltő képernyő -->
-  <div id="loadingScreen">Betöltés…</div>
+      <hr style="margin:16px 0;border:none;border-top:1px solid #eef2ff" />
 
-  <!-- Tartalom -->
-  <div id="content">
-    <h2>Átirányító oldal</h2>
+      <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;">
+        <div>
+          <label for="currentUrl">Jelenlegi átirányítási URL</label>
+          <div id="currentUrl" class="current-url muted">Betöltés…</div>
 
-    <p>Jelenlegi átirányítási URL:</p>
-    <p id="currentUrl">Betöltés...</p>
-    <button onclick="redirect()">Átirányítás</button>
+          <div style="margin-top:14px;">
+            <label for="newUrl">Új átirányítási URL</label>
+            <input id="newUrl" type="text" placeholder="https://pelda.hu" autocomplete="off" />
+            <div style="margin-top:10px; display:flex; gap:8px;">
+              <button id="saveBtn">Mentés</button>
+              <button id="testBtn" class="ghost">Teszt megnyitás</button>
+              <button id="refreshBtn" class="ghost">Frissít</button>
+            </div>
+            <div id="message" class="status" aria-live="polite"></div>
+          </div>
+        </div>
 
-    <h3>Új átirányítási URL beállítása</h3>
-    <input id="newUrl" type="text" placeholder="Új URL...">
-    <button onclick="saveUrl()">Mentés</button>
+        <div>
+          <label>Gyors műveletek</label>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <button id="redirectBtn">Átirányítás most</button>
+            <button id="copyBtn" class="ghost">URL másolása vágólapra</button>
+            <button id="openWorkerBtn" class="ghost">Worker getUrl megnyitása</button>
+          </div>
 
-    <p id="status"></p>
+          <div style="margin-top:16px;">
+            <label>Beállítások</label>
+            <div class="small">**Fontos**: cseréld ki a backend URL-eket a saját Worker címeidre a kódban.</div>
+            <div style="margin-top:10px;" class="small">Ha CORS hibát látsz, győződj meg róla, hogy a Worker helyesen adja vissza a CORS fejlécet.</div>
+          </div>
+        </div>
+      </div>
+
+      <footer>Worker backendre optimalizált frontend</footer>
+    </div>
   </div>
 
   <script>
-    const backendGet = "https://redirect-project-hyo3.onrender.com/getUrl";
-    const backendSet = "https://redirect-project-hyo3.onrender.com/setUrl";
+    // ======= Állítsd be ide a saját Worker URL-jeidet =======
+    // Példa: "https://redirect-worker.youraccount.workers.dev/getUrl"
+    const backendGet = "https://redirect-project.nyuszilevelezo.workers.dev/getUrl";
+    const backendSet = "https://redirect-project.nyuszilevelezo.workers.dev/setUrl";
+    // ======================================================
 
-    // 🟦 Több lépcsős wake-up rendszer (Render free tierhez optimalizálva)
-    async function wakeUpBackend() {
-      const delays = [0, 2000, 5000, 10000]; // 0s, 2s, 5s, 10s
+    const currentUrlEl = document.getElementById("currentUrl");
+    const newUrlInput = document.getElementById("newUrl");
+    const messageEl = document.getElementById("message");
+    const liveIndicator = document.getElementById("liveIndicator");
 
-      for (const delay of delays) {
-        setTimeout(() => {
-          fetch(backendGet).catch(() => {});
-        }, delay);
-      }
-    }
+    const saveBtn = document.getElementById("saveBtn");
+    const redirectBtn = document.getElementById("redirectBtn");
+    const copyBtn = document.getElementById("copyBtn");
+    const testBtn = document.getElementById("testBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const openWorkerBtn = document.getElementById("openWorkerBtn");
 
-    // 🟦 Backend állapot ellenőrzése
-    async function checkBackendReady() {
+    let cachedUrl = null;
+
+    // Egyszerű CORS-safe fetch wrapper
+    async function safeFetch(url, options = {}) {
       try {
-        const res = await fetch(backendGet);
-        if (!res.ok) return false;
-        const data = await res.json();
-        return data && data.url;
-      } catch {
-        return false;
+        const res = await fetch(url, options);
+        const contentType = res.headers.get("content-type") || "";
+        const text = await res.text();
+        let body = null;
+        if (contentType.includes("application/json")) {
+          try { body = JSON.parse(text); } catch { body = text; }
+        } else {
+          body = text;
+        }
+        return { ok: res.ok, status: res.status, body, headers: res.headers };
+      } catch (err) {
+        return { ok: false, error: err.message || String(err) };
       }
     }
 
-    // 🟦 Betöltő képernyő → eltűnik, ha a backend felállt
-    async function waitForBackend() {
-      wakeUpBackend();
+    // Betölti a jelenlegi URL-t a Workerből
+    async function loadCurrentUrl(showMessage = false) {
+      messageEl.textContent = "";
+      liveIndicator.textContent = "ellenőrzés…";
+      liveIndicator.className = "muted";
 
-      let ready = false;
+      const res = await safeFetch(backendGet, { method: "GET", cache: "no-store" });
 
-      for (let i = 0; i < 20; i++) {   // max ~20 próbálkozás (kb. 20–30 mp)
-        ready = await checkBackendReady();
-        if (ready) break;
-        await new Promise(r => setTimeout(r, 1500)); // 1.5 mp várakozás
-      }
-
-      if (ready) {
-        document.getElementById("loadingScreen").style.display = "none";
-        document.getElementById("content").style.display = "block";
-        loadUrl();
-      } else {
-        document.getElementById("loadingScreen").innerText =
-          "A backend nem elérhető. Próbáld újra később.";
-      }
-    }
-
-    // 🟦 URL betöltése
-    async function loadUrl() {
-      try {
-        const res = await fetch(backendGet);
-        const data = await res.json();
-        window.redirectUrl = data.url;
-        document.getElementById("currentUrl").innerText = data.url;
-      } catch {
-        document.getElementById("currentUrl").innerText = "Hiba történt.";
-      }
-    }
-
-    // 🟦 Mentés
-    async function saveUrl() {
-      const newUrl = document.getElementById("newUrl").value.trim();
-      if (!newUrl) {
-        document.getElementById("status").innerText = "Adj meg egy URL-t!";
+      if (!res.ok) {
+        currentUrlEl.textContent = "Nem elérhető";
+        messageEl.textContent = "A backend nem válaszolt. Ellenőrizd a Worker URL-t.";
+        messageEl.className = "status err";
+        liveIndicator.textContent = "offline";
+        liveIndicator.className = "status err";
         return;
       }
 
-      document.getElementById("status").innerText = "Mentés folyamatban...";
+      // Várható formátum: { "url": "https://..." }
+      const data = res.body;
+      const url = (data && data.url) ? data.url : null;
+      cachedUrl = url;
+      currentUrlEl.textContent = url || "Nincs beállítva";
+      if (showMessage) {
+        messageEl.textContent = "Betöltve.";
+        messageEl.className = "status ok";
+      } else {
+        messageEl.textContent = "";
+      }
+      liveIndicator.textContent = "online";
+      liveIndicator.className = "status ok";
+    }
 
+    // Mentés a Workerbe
+    async function saveUrl() {
+      const newUrl = newUrlInput.value.trim();
+      if (!newUrl) {
+        messageEl.textContent = "Adj meg egy URL-t!";
+        messageEl.className = "status err";
+        return;
+      }
+
+      messageEl.textContent = "Mentés folyamatban…";
+      messageEl.className = "status";
+
+      const res = await safeFetch(backendSet, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: newUrl })
+      });
+
+      if (!res.ok) {
+        messageEl.textContent = "Mentés sikertelen. Ellenőrizd a Worker-t és a CORS beállításokat.";
+        messageEl.className = "status err";
+        return;
+      }
+
+      messageEl.textContent = "Sikeres mentés.";
+      messageEl.className = "status ok";
+      newUrlInput.value = "";
+      await loadCurrentUrl(true);
+    }
+
+    // Átirányítás
+    function redirectNow() {
+      if (!cachedUrl) {
+        messageEl.textContent = "Nincs beállított URL.";
+        messageEl.className = "status err";
+        return;
+      }
+      // Biztonság: csak teljes URL-ekre engedünk átirányítást
       try {
-        const res = await fetch(backendSet, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: newUrl })
-        });
-
-        if (!res.ok) throw new Error("Hálózati hiba");
-
-        document.getElementById("status").innerText = "Sikeres mentés!";
-        loadUrl();
+        const u = new URL(cachedUrl);
+        window.location.href = u.href;
       } catch {
-        document.getElementById("status").innerText =
-          "A mentés nem sikerült. Részletek: Failed to fetch";
+        messageEl.textContent = "A beállított URL érvénytelen.";
+        messageEl.className = "status err";
       }
     }
 
-    // 🟦 Átirányítás
-    function redirect() {
-      if (window.redirectUrl) {
-        window.location.href = window.redirectUrl;
+    // Másolás vágólapra
+    async function copyToClipboard() {
+      if (!cachedUrl) {
+        messageEl.textContent = "Nincs beállított URL.";
+        messageEl.className = "status err";
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(cachedUrl);
+        messageEl.textContent = "Másolva a vágólapra.";
+        messageEl.className = "status ok";
+      } catch {
+        messageEl.textContent = "A böngésző nem engedélyezi a vágólap használatát.";
+        messageEl.className = "status err";
       }
     }
 
-    // 🟦 Induláskor: backend felébresztése + betöltő képernyő
-    waitForBackend();
+    // Teszt megnyitás új ablakban
+    function openTest() {
+      if (!cachedUrl) {
+        messageEl.textContent = "Nincs beállított URL.";
+        messageEl.className = "status err";
+        return;
+      }
+      window.open(cachedUrl, "_blank", "noopener");
+    }
+
+    // Worker getUrl megnyitása
+    function openWorkerGet() {
+      window.open(backendGet, "_blank", "noopener");
+    }
+
+    // Események
+    saveBtn.addEventListener("click", saveUrl);
+    redirectBtn.addEventListener("click", redirectNow);
+    copyBtn.addEventListener("click", copyToClipboard);
+    testBtn.addEventListener("click", openTest);
+    refreshBtn.addEventListener("click", () => loadCurrentUrl(true));
+    openWorkerBtn.addEventListener("click", openWorkerGet);
+
+    // Induláskor betöltés
+    (async function init() {
+      // Alapvető validáció: ellenőrizzük, hogy a backend URL-ek át lettek-e állítva
+      if (backendGet.includes("YOUR_ACCOUNT") || backendSet.includes("YOUR_ACCOUNT")) {
+        currentUrlEl.textContent = "Kérlek állítsd be a Worker URL-eket a kódban.";
+        messageEl.textContent = "Cseréld ki a backendGet és backendSet változókat a saját Worker címeidre.";
+        messageEl.className = "status err";
+        liveIndicator.textContent = "nincs konfigurálva";
+        liveIndicator.className = "status err";
+        return;
+      }
+
+      await loadCurrentUrl();
+      // opcionális: időközönként frissítjük a státuszt
+      setInterval(loadCurrentUrl, 60_000); // 60 mp-enként
+    })();
   </script>
-
 </body>
 </html>
